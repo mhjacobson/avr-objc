@@ -32,7 +32,7 @@ Class objc_getClass(const char *name);
 
 #if __OBJC__
 @interface Object {
-@public
+@private
     Class _isa;
 }
 
