@@ -175,7 +175,7 @@ static void objc_setup_class(Class cls) {
     }
 }
 
-#define MAX_SYMTABS 16
+#define MAX_SYMTABS 8
 static const struct objc_symtab *symtabs[MAX_SYMTABS];
 static unsigned short nsymtab;
 
