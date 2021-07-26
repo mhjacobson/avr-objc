@@ -1,3 +1,9 @@
+/*
+ * objc.h
+ * author: Matt Jacobson
+ * created: June 2021
+ */
+
 #include <stdint.h>
 
 #ifndef OBJC_H
