@@ -5,13 +5,19 @@
 #include <stdio.h>
 #include <stddef.h>
 
+#define CLASS_SETUP (1U << 0)
+
 struct objc_class {
     struct objc_class *isa;
     struct objc_class *superclass;
 
+#if 0
     // NOTE: the Apple runtime replaces these with a single inline cache_t, which is two pointers in size.
     void *cache;
     void *vtable;
+#endif /* 0 */
+    uintptr_t flags; // void *cache;
+    uintptr_t unused; // void *vtable;
 
     // NOTE: the Apple runtime replaces this with a class_data_bits_t, which is the rw data pointer plus some flags in the unused bits.
     struct class_ro *rodata;
@@ -82,7 +88,7 @@ IMP class_lookupMethod(const struct objc_class *const cls, const SEL _cmd) {
     }
 
     if (imp == 0) {
-        printf("objc: undeliverable message %s\n", (char *)_cmd);
+        printf("objc: undeliverable message '%s' (%p)\n", (const char *)_cmd, _cmd);
         for (;;) ;
     }
 
@@ -93,11 +99,8 @@ const struct objc_class *class_getSuperclass(const struct objc_class *cls) {
     return cls->superclass;
 }
 
-// TODO: I need to fix up instance_size before this is usable.
 id class_createInstance(Class cls) {
-    const struct class_ro *const rodata = cls->rodata;
-    const size_t size = rodata->instance_size;
-    
+    const size_t size = cls->rodata->instance_size;
     const id object = calloc(size, 1);
     *(struct objc_class **)object = cls;
     return object;
@@ -114,6 +117,49 @@ void objc_copyStruct(void *dest, const void *src, ptrdiff_t size, BOOL atomic, B
     memmove(dest, src, size);
 }
 
+static void objc_setup_class(Class cls) {
+    if (!(cls->flags & CLASS_SETUP)) {
+        cls->flags |= CLASS_SETUP;
+
+        // In an environment with no dynamic linking, we don't have to worry about things like subclasses
+        // showing up before (or without, in the case of weak linking) their superclasses.
+        const Class superclass = cls->superclass;
+
+        if (superclass) {
+            objc_setup_class(cls);
+
+            // Fix up instance_start to account for base class size changes.
+            const uint16_t superclass_size = superclass->rodata->instance_size;
+            const int16_t start_delta = (int16_t)superclass_size - cls->rodata->instance_start;
+            cls->rodata->instance_start = superclass_size;
+            cls->rodata->instance_size = superclass_size + start_delta;
+
+#if DEBUG_INIT_SYMTAB
+            printf("%s: %hd\n", cls->rodata->name, start_delta);
+#endif /* DEBUG_INIT_SYMTAB */
+
+            // Fix up ivar offsets, if necessary.
+            if (start_delta != 0) {
+                const struct ivar_list *const ivar_list = cls->rodata->ivars;
+
+                if (ivar_list) {
+                    for (int i = 0; i < ivar_list->element_count; i++) {
+                        const struct ivar *const ivar = &ivar_list->ivars[i];
+                        uint16_t *const offset = ivar->offset;
+#if DEBUG_INIT_SYMTAB
+                        printf("%s: %hu -> %hu\n", ivar->name, *offset, *offset + start_delta);
+#endif /* DEBUG_INIT_SYMTAB */
+                        *offset += start_delta;
+                        // TODO: check that *offset + ivar_size <= instance_size ?
+                    }
+                }
+            }
+        }
+
+        // TODO: add category methods.
+    }
+}
+
 #define MAX_SYMTABS 16
 static const struct objc_symtab *symtabs[MAX_SYMTABS];
 static unsigned short nsymtab;
@@ -123,16 +169,20 @@ void objc_init_symtab(const struct objc_symtab *const symtab) {
         symtabs[nsymtab] = symtab;
         nsymtab++;
     } else {
-        printf("objc: too many symbtabs!\n");
+        printf("objc: too many symtabs!\n");
         for (;;) ;
     }
 
-#if DEBUG_INIT_SYMTAB
     for (short i = 0; i < symtab->cls_def_cnt; i++) {
-        const struct objc_class *const cls = symtab->defs[i];
+        const Class cls = symtab->defs[i];
+        objc_setup_class(cls);
+
+#if DEBUG_INIT_SYMTAB
         printf("objc: loaded class '%s'\n", cls->rodata->name);
+#endif /* DEBUG_INIT_SYMTAB */
     }
 
+#if DEBUG_INIT_SYMTAB
     printf("objc: loaded symtab %p\n", symtab);
 #endif /* DEBUG_INIT_SYMTAB */
 }
