@@ -66,7 +66,7 @@ struct ivar_list {
     struct ivar ivars[];
 };
 
-IMP class_lookupMethod(const struct objc_class *const cls, const SEL _cmd) {
+static IMP class_lookupMethodIfPresent(const struct objc_class *const cls, const SEL _cmd) {
     const struct class_ro *const rodata = cls->rodata;
     const struct method_list *const method_list = rodata->methods;
     const char *const name = rodata->name;
@@ -84,8 +84,14 @@ IMP class_lookupMethod(const struct objc_class *const cls, const SEL _cmd) {
     }
 
     if (imp == 0 && cls->superclass) {
-        imp = class_lookupMethod(cls->superclass, _cmd);
+        imp = class_lookupMethodIfPresent(cls->superclass, _cmd);
     }
+
+    return imp;
+}
+
+IMP class_lookupMethod(const struct objc_class *const cls, const SEL _cmd) {
+    const IMP imp = class_lookupMethodIfPresent(cls, _cmd);
 
     if (imp == 0) {
         printf("objc: undeliverable message '%s' (%p)\n", (const char *)_cmd, _cmd);
@@ -157,6 +163,15 @@ static void objc_setup_class(Class cls) {
         }
 
         // TODO: add category methods.
+
+        // Send +load, if necessary.
+        const Class metaclass = cls->isa;
+        const SEL load = @selector(load);
+        const IMP loadIMP = class_lookupMethodIfPresent(metaclass, load);
+
+        if (loadIMP) {
+            loadIMP(cls, load);
+        }
     }
 }
 
