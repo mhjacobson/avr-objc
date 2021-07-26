@@ -8,6 +8,8 @@ typedef struct objc_selector *SEL;
 typedef struct objc_class *Class;
 typedef id (*IMP)(id, SEL, ...);
 typedef _Bool BOOL;
+#define YES 1
+#define NO 0
 #define nil ((id)0)
 #define Nil ((Class)0)
 
@@ -41,6 +43,13 @@ Class objc_getClass(const char *name);
 @end
 
 @interface Protocol : Object
+
+@end
+
+@interface Object (Description)
+
++ (const char *)description;
+- (const char *)copyDescription;
 
 @end
 #endif /* __OBJC__ */

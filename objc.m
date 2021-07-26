@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <stddef.h>
 
-#define CLASS_SETUP (1U << 0)
+#define CLASS_SETUP  (1U << 0)
+#define CLASS_LOADED (1U << 1)
 
 struct objc_class {
     struct objc_class *isa;
@@ -17,7 +18,7 @@ struct objc_class {
     void *vtable;
 #endif /* 0 */
     uintptr_t flags; // void *cache;
-    uintptr_t unused; // void *vtable;
+    struct class_rw *rwdata; // void *vtable;
 
     // NOTE: the Apple runtime replaces this with a class_data_bits_t, which is the rw data pointer plus some flags in the unused bits.
     struct class_ro *rodata;
@@ -66,7 +67,37 @@ struct ivar_list {
     struct ivar ivars[];
 };
 
-static IMP class_lookupMethodIfPresent(const struct objc_class *const cls, const SEL _cmd) {
+struct objc_category {
+    char *name;
+    struct objc_class *cls;
+    struct method_list *instanceMethods;
+    struct method_list *classMethods;
+#if 0
+    struct protocol_list_t *protocols;
+    struct property_list_t *instanceProperties;
+    // Fields below this point are not always present.
+    struct property_list_t *_classProperties;
+#endif /* 0 */
+};
+
+#pragma mark -
+
+#define MAX_ADDED_METHODS 16
+
+struct class_rw {
+    uint8_t num_added_methods;
+    struct method added_methods[MAX_ADDED_METHODS];
+};
+
+static struct class_rw *class_getRWData(const Class cls, const BOOL creating) {
+    if (creating && !cls->rwdata) {
+        cls->rwdata = calloc(sizeof (struct class_rw), 1);
+    }
+
+    return cls->rwdata;
+}
+
+static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _cmd) {
     const struct class_ro *const rodata = cls->rodata;
     const struct method_list *const method_list = rodata->methods;
     const char *const name = rodata->name;
@@ -83,6 +114,18 @@ static IMP class_lookupMethodIfPresent(const struct objc_class *const cls, const
         }
     }
 
+    const struct class_rw *const rwdata = class_getRWData(cls, NO);
+
+    if (rwdata) {
+        for (int i = 0; i < rwdata->num_added_methods; i++) {
+            const struct method *const method = &rwdata->added_methods[i];
+
+            if (strcmp((char *)method->name, (char *)_cmd) == 0) {
+                imp = method->imp;
+            }
+        }
+    }
+
     if (imp == 0 && cls->superclass) {
         imp = class_lookupMethodIfPresent(cls->superclass, _cmd);
     }
@@ -90,7 +133,7 @@ static IMP class_lookupMethodIfPresent(const struct objc_class *const cls, const
     return imp;
 }
 
-IMP class_lookupMethod(const struct objc_class *const cls, const SEL _cmd) {
+IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
     const IMP imp = class_lookupMethodIfPresent(cls, _cmd);
 
     if (imp == 0) {
@@ -123,16 +166,14 @@ void objc_copyStruct(void *dest, const void *src, ptrdiff_t size, BOOL atomic, B
     memmove(dest, src, size);
 }
 
-static void objc_setup_class(Class cls) {
+static void objc_setup_class(const Class cls) {
     if (!(cls->flags & CLASS_SETUP)) {
-        cls->flags |= CLASS_SETUP;
-
         // In an environment with no dynamic linking, we don't have to worry about things like subclasses
         // showing up before (or without, in the case of weak linking) their superclasses.
         const Class superclass = cls->superclass;
 
         if (superclass) {
-            objc_setup_class(cls);
+            objc_setup_class(superclass);
 
             // Fix up instance_start to account for base class size changes.
             const uint16_t superclass_size = superclass->rodata->instance_size;
@@ -162,7 +203,51 @@ static void objc_setup_class(Class cls) {
             }
         }
 
-        // TODO: add category methods.
+        cls->flags |= CLASS_SETUP;
+    }
+}
+
+static void class_addMethod(const Class cls, const struct method method) {
+    struct class_rw *const rwdata = class_getRWData(cls, YES);
+
+    if (rwdata->num_added_methods < MAX_ADDED_METHODS) {
+        rwdata->added_methods[rwdata->num_added_methods] = method;
+        rwdata->num_added_methods++;
+    } else {
+        printf("objc: too many methods added to '%s'\n", cls->rodata->name);
+        for (;;) ;
+    }
+}
+
+static void objc_install_category(const struct objc_category *const category) {
+    const Class cls = category->cls;
+    const struct method_list *const instance_method_list = category->instanceMethods;
+    
+    if (instance_method_list) {
+        for (int i = 0; i < instance_method_list->element_count; i++) {
+            class_addMethod(cls, instance_method_list->methods[i]);
+        }
+    }
+
+    const Class metaclass = cls->isa;
+    const struct method_list *const class_method_list = category->classMethods;
+    
+    if (class_method_list) {
+        for (int i = 0; i < class_method_list->element_count; i++) {
+            class_addMethod(metaclass, class_method_list->methods[i]);
+        }
+    }
+}
+
+static void objc_load_class(const Class cls) {
+    if (!(cls->flags & CLASS_LOADED)) {
+        // In an environment with no dynamic linking, we don't have to worry about things like subclasses
+        // showing up before (or without, in the case of weak linking) their superclasses.
+        const Class superclass = cls->superclass;
+
+        if (superclass) {
+            objc_load_class(cls->superclass);
+        }
 
         // Send +load, if necessary.
         const Class metaclass = cls->isa;
@@ -172,6 +257,8 @@ static void objc_setup_class(Class cls) {
         if (loadIMP) {
             loadIMP(cls, load);
         }
+
+        cls->flags |= CLASS_LOADED;
     }
 }
 
@@ -191,6 +278,24 @@ void objc_init_symtab(const struct objc_symtab *const symtab) {
     for (short i = 0; i < symtab->cls_def_cnt; i++) {
         const Class cls = symtab->defs[i];
         objc_setup_class(cls);
+
+#if DEBUG_INIT_SYMTAB
+        printf("objc: setup class '%s'\n", cls->rodata->name);
+#endif /* DEBUG_INIT_SYMTAB */
+    }
+
+    for (short i = 0; i < symtab->cat_def_cnt; i++) {
+        const struct objc_category *const category = symtab->defs[symtab->cls_def_cnt + i];
+        objc_install_category(category);
+
+#if DEBUG_INIT_SYMTAB
+        printf("objc: installed category '%s'\n", category->name);
+#endif /* DEBUG_INIT_SYMTAB */
+    }
+
+    for (short i = 0; i < symtab->cls_def_cnt; i++) {
+        const Class cls = symtab->defs[i];
+        objc_load_class(cls);
 
 #if DEBUG_INIT_SYMTAB
         printf("objc: loaded class '%s'\n", cls->rodata->name);
@@ -227,5 +332,19 @@ Class objc_getClass(const char *const name) {
 @end
 
 @implementation Protocol
+
+@end
+
+@implementation Object (Description)
+
++ (const char *)description {
+    return ((Class)self)->rodata->name;
+}
+
+- (const char *)copyDescription {
+    char *const description = malloc(30);
+    snprintf(description, 30, "<%s: %p>", [self->_isa description], self);
+    return description;
+}
 
 @end
