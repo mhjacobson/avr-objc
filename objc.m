@@ -35,7 +35,19 @@ struct class_ro {
     uint16_t flags;
     uint16_t instance_start;
     uint16_t instance_size;
+#if __GNUC__ && !__clang__
+    // Well here's a shitty situation.
+    // Clang's comments say there is an `unsigned int`-sized "reserved" member here, because 
+    // when the objc4 modern runtime is used on LP64 platforms, there would otherwise be a 
+    // 32-bit-sized hole here for alignment reasons.
+    // However, it doesn't actually add the "reserved" field to its AST data structures.
+    // GCC *does* add the field explicitly.
+    // On LP64, adding it or not is irrelevant.  But on AVR, sizeof (unsigned int) == sizeof (uint8_t *),
+    // and it matters.
+    // TODO: file a radar against GCC.
+    // NOTE: this means that I have to compile Objective-C code either all with clang or all with GCC.
     uint16_t reserved;
+#endif
     uint8_t *ivarLayout;
     char *name;
     struct method_list *methods;
