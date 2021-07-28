@@ -1,7 +1,7 @@
 HEADER_SEARCH_PATHS=-I ${HOME}/src/avr-serial/
 LIBRARIES=${HOME}/src/avr-serial/build/serial.a
 OTHER_CFLAGS=
-CFLAGS=--std=c11 -Wa,-mno-dollar-line-separator -Wl,--gc-sections -Wl,--allow-multiple-definition -mmcu=${MCU} -Os ${HEADER_SEARCH_PATHS} ${OTHER_CFLAGS}
+CFLAGS=--std=c11 -Wa,-mno-dollar-line-separator -mmcu=${MCU} -Os ${HEADER_SEARCH_PATHS} ${OTHER_CFLAGS}
 OBJCFLAGS=-x objective-c -fnext-runtime -fobjc-abi-version=2 -fno-objc-sjlj-exceptions -fobjc-nilcheck
 
 CC=avr-gcc
