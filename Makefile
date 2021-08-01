@@ -1,10 +1,23 @@
-HEADER_SEARCH_PATHS=-I ${HOME}/src/avr-serial/
-LIBRARIES=${HOME}/src/avr-serial/build/serial.a
-OTHER_CFLAGS=
-CFLAGS=--std=c11 -Wa,-mno-dollar-line-separator -mmcu=${MCU} -Os ${HEADER_SEARCH_PATHS} ${OTHER_CFLAGS}
-OBJCFLAGS=-x objective-c -fnext-runtime -fobjc-abi-version=2 -fno-objc-sjlj-exceptions -fobjc-nilcheck
+#
+# Makefile
+# author: Matt Jacobson
+# created: July 2021
+#
 
-CC=avr-gcc
+OTHER_CFLAGS=
+
+ifdef GCC
+  GENFLAGS=-mmcu=${MCU}
+  CFLAGS=--std=c11 -Wa,-mno-dollar-line-separator -Os ${OTHER_CFLAGS}
+  OBJCFLAGS=-x objective-c -fnext-runtime -fobjc-abi-version=2 -fno-objc-sjlj-exceptions -fobjc-nilcheck
+  CC=avr-gcc
+else
+  GENFLAGS=-target avr -mmcu=${MCU} --sysroot /opt/local
+  CFLAGS=--std=c11 -mdouble=64 -Os -I '=avr/include' -Wno-cast-of-sel-type -fno-use-init-array ${OTHER_CFLAGS}
+  OBJCFLAGS=-x objective-c -fobjc-runtime=macosx
+  CC=avr-clang
+endif
+
 AR=avr-ar
 MCU=atmega644p
 
@@ -13,19 +26,19 @@ MCU=atmega644p
 all: build/objc.a
 
 clean:
-	rm -r build
+	rm -rf build
 
 build:
 	mkdir build
 
 build/%.o: %.c | build
-	${CC} -c -o "$@" ${CFLAGS} $<
+	${CC} -c -o "$@" ${GENFLAGS} ${CFLAGS} $<
 
 build/%.o: %.m | build
-	${CC} -c -o "$@" ${CFLAGS} ${OBJCFLAGS} $<
+	${CC} -c -o "$@" ${GENFLAGS} ${CFLAGS} ${OBJCFLAGS} $<
 
 build/%.o: %.s | build
-	${CC} -c -o "$@" ${CFLAGS} $<
+	${CC} -c -o "$@" ${GENFLAGS} $<
 
 build/objc.a: build/objc.o build/message.o build/misc.o | build
 	${AR} -cq $@ $^

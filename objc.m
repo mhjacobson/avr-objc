@@ -199,9 +199,9 @@ static void objc_setup_class(const Class cls) {
             cls->rodata->instance_start = superclass_size;
             cls->rodata->instance_size = superclass_size + start_delta;
 
-#if DEBUG_INIT_SYMTAB
+#if DEBUG_INIT
             printf("%s: %hd\n", cls->rodata->name, start_delta);
-#endif /* DEBUG_INIT_SYMTAB */
+#endif /* DEBUG_INIT */
 
             // Fix up ivar offsets, if necessary.
             if (start_delta != 0) {
@@ -211,9 +211,9 @@ static void objc_setup_class(const Class cls) {
                     for (int i = 0; i < ivar_list->element_count; i++) {
                         const struct ivar *const ivar = &ivar_list->ivars[i];
                         uint16_t *const offset = ivar->offset;
-#if DEBUG_INIT_SYMTAB
+#if DEBUG_INIT
                         printf("%s: %hu -> %hu\n", ivar->name, *offset, *offset + start_delta);
-#endif /* DEBUG_INIT_SYMTAB */
+#endif /* DEBUG_INIT */
                         *offset += start_delta;
                         // TODO: check that *offset + ivar_size <= instance_size ?
                     }
@@ -280,6 +280,86 @@ static void objc_load_class(const Class cls) {
     }
 }
 
+#if !USE_SYMTAB
+
+extern const Class classlist[]   __asm__("__OBJC_CLASSLIST_BEGIN");
+extern const Class classlist_end __asm__("__OBJC_CLASSLIST_END");
+
+extern const struct objc_category *catlist[]   __asm__("__OBJC_CATLIST_BEGIN");
+extern const struct objc_category *catlist_end __asm__("__OBJC_CATLIST_END");
+
+// ISO C11, sec. 6.5.9.6
+// Two pointers compare equal if and only if both are null pointers, both are pointers to the
+// same object (including a pointer to an object and a subobject at its beginning) or function,
+// both are pointers to one past the last element of the same array object, or one is a pointer
+// to one past the end of one array object and the other is a pointer to the start of a different
+// array object that happens to immediately follow the first array object in the address
+// space. [109]
+//
+// [109]:
+// Two objects may be adjacent in memory because they are adjacent elements of a larger array or
+// adjacent members of a structure with no padding between them, or because the implementation chose
+// to place them so, even though they are unrelated. If prior invalid pointer operations (such as accesses
+// outside array bounds) produced undefined behavior, subsequent comparisons also produce undefined
+// behavior.
+
+static void objc_setup_classes(void) {
+    for (const Class *ptr = classlist; ptr != &classlist_end; ptr++) {
+        const Class cls = *ptr;
+        objc_setup_class(cls);
+#if DEBUG_INIT
+        printf("objc: setup class '%s'\n", cls->rodata->name);
+#endif /* DEBUG_INIT */
+    }
+}
+
+static void objc_install_categories(void) {
+    for (const struct objc_category **ptr = catlist; ptr != &catlist_end; ptr++) {
+        const struct objc_category *category = *ptr;
+        objc_install_category(category);
+
+#if DEBUG_INIT
+        printf("objc: installed category '%s'\n", category->name);
+#endif /* DEBUG_INIT */
+    }
+}
+
+static void objc_load_classes(void) {
+    for (const Class *ptr = classlist; ptr != &classlist_end; ptr++) {
+        const Class cls = *ptr;
+        objc_load_class(cls);
+
+#if DEBUG_INIT
+        printf("objc: loaded class '%s'\n", cls->rodata->name);
+#endif /* DEBUG_INIT */
+    }
+}
+
+__attribute__((constructor))
+static void objc_init(void) {
+    objc_setup_classes();
+    objc_install_categories();
+    objc_load_classes();
+
+#if DEBUG_INIT
+    printf("objc: initialized\n");
+#endif /* DEBUG_INIT */
+}
+
+Class objc_getClass(const char *const name) {
+    for (const Class *ptr = classlist; ptr < &classlist_end; ptr++) {
+        const Class cls = *ptr;
+
+        if (!strcmp(name, cls->rodata->name)) {
+            return cls;
+        }
+    }
+
+    return Nil;
+}
+
+#else /* !USE_SYMTAB */
+
 #define MAX_SYMTABS 8
 static const struct objc_symtab *symtabs[MAX_SYMTABS];
 static unsigned short nsymtab;
@@ -297,32 +377,32 @@ void objc_init_symtab(const struct objc_symtab *const symtab) {
         const Class cls = symtab->defs[i];
         objc_setup_class(cls);
 
-#if DEBUG_INIT_SYMTAB
+#if DEBUG_INIT
         printf("objc: setup class '%s'\n", cls->rodata->name);
-#endif /* DEBUG_INIT_SYMTAB */
+#endif /* DEBUG_INIT */
     }
 
     for (short i = 0; i < symtab->cat_def_cnt; i++) {
         const struct objc_category *const category = symtab->defs[symtab->cls_def_cnt + i];
         objc_install_category(category);
 
-#if DEBUG_INIT_SYMTAB
+#if DEBUG_INIT
         printf("objc: installed category '%s'\n", category->name);
-#endif /* DEBUG_INIT_SYMTAB */
+#endif /* DEBUG_INIT */
     }
 
     for (short i = 0; i < symtab->cls_def_cnt; i++) {
         const Class cls = symtab->defs[i];
         objc_load_class(cls);
 
-#if DEBUG_INIT_SYMTAB
+#if DEBUG_INIT
         printf("objc: loaded class '%s'\n", cls->rodata->name);
-#endif /* DEBUG_INIT_SYMTAB */
+#endif /* DEBUG_INIT */
     }
 
-#if DEBUG_INIT_SYMTAB
+#if DEBUG_INIT
     printf("objc: loaded symtab %p\n", symtab);
-#endif /* DEBUG_INIT_SYMTAB */
+#endif /* DEBUG_INIT */
 }
 
 Class objc_getClass(const char *const name) {
@@ -340,6 +420,8 @@ Class objc_getClass(const char *const name) {
 
     return Nil;
 }
+
+#endif /* !USE_SYMTAB */
 
 @implementation Object
 
