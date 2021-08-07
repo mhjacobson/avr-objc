@@ -19,7 +19,7 @@ else
 endif
 
 AR=avr-ar
-MCU=atmega644p
+MCU=atmega1284
 
 .PHONY: all clean upload-%
 
