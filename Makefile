@@ -13,7 +13,7 @@ ifdef GCC
   CC=avr-gcc
 else
   GENFLAGS=-target avr -mmcu=${MCU} --sysroot /opt/local
-  CFLAGS=--std=c11 -mdouble=64 -Os -I '=avr/include' -Wno-cast-of-sel-type ${OTHER_CFLAGS}
+  CFLAGS=--std=c11 -mdouble=64 -Os -Wno-cast-of-sel-type ${OTHER_CFLAGS}
   OBJCFLAGS=-x objective-c -fobjc-runtime=macosx
   CC=avr-clang
 endif
