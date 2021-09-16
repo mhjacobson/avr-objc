@@ -284,6 +284,26 @@ static void objc_load_class(const Class cls) {
     }
 }
 
+static void objc_load_category(const struct objc_category *const category) {
+    // Send category +load, if necessary.
+    const struct method_list *const class_method_list = category->classMethods;
+
+    if (class_method_list) {
+        for (int i = 0; i < class_method_list->element_count; i++) {
+            const struct method *const method = &class_method_list->methods[i];
+
+            if (strcmp((const char *)method->name, "load") == 0) {
+                const Class cls = category->cls;
+                const SEL load = @selector(load);
+                const IMP loadIMP = method->imp;
+
+                loadIMP(cls, load);
+                break;
+            }
+        }
+    }
+}
+
 #if !USE_SYMTAB
 
 extern const Class classlist[]   __asm__("__OBJC_CLASSLIST_BEGIN");
@@ -339,11 +359,23 @@ static void objc_load_classes(void) {
     }
 }
 
+static void objc_load_categories(void) {
+    for (const struct objc_category **ptr = catlist; ptr != &catlist_end; ptr++) {
+        const struct objc_category *category = *ptr;
+        objc_load_category(category);
+
+#if DEBUG_INIT
+        printf("objc: loaded category '%s'\n", category->name);
+#endif /* DEBUG_INIT */
+    }
+}
+
 __attribute__((constructor))
 static void objc_init(void) {
     objc_setup_classes();
     objc_install_categories();
     objc_load_classes();
+    objc_load_categories();
 
 #if DEBUG_INIT
     printf("objc: initialized\n");
