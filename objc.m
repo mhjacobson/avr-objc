@@ -13,6 +13,7 @@
 
 #define CLASS_SETUP  (1U << 0)
 #define CLASS_LOADED (1U << 1)
+#define CLASS_META   (1U << 2)
 
 struct objc_class {
     struct objc_class *isa;
@@ -153,7 +154,10 @@ IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
     const IMP imp = class_lookupMethodIfPresent(cls, _cmd);
 
     if (imp == 0) {
-        printf("objc: undeliverable message '%s' (cls=%p, _cmd=%p)\n", (const char *)_cmd, cls, _cmd);
+        const BOOL meta = (cls->flags & CLASS_META) != 0;
+        const char sigil = "-+"[meta]; // clang crashes with ternary
+
+        printf("objc: undeliverable message %c[%s %s] (cls=%p, _cmd=%p)\n", sigil, cls->rodata->name, (const char *)_cmd, cls, _cmd);
         for (;;) ;
     }
 
@@ -218,6 +222,9 @@ static void objc_setup_class(const Class cls) {
                 }
             }
         }
+
+        const Class metaclass = cls->isa;
+        metaclass->flags |= CLASS_META;
 
         cls->flags |= CLASS_SETUP;
     }
