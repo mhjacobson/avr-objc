@@ -155,7 +155,7 @@ IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
     const IMP imp = class_lookupMethodIfPresent(cls, _cmd);
 
     if (imp == 0) {
-        printf("objc: undeliverable message '%s' (%p)\n", (const char *)_cmd, _cmd);
+        printf("objc: undeliverable message '%s' (cls=%p, _cmd=%p)\n", (const char *)_cmd, cls, _cmd);
         for (;;) ;
     }
 
@@ -197,14 +197,14 @@ static void objc_setup_class(const Class cls) {
             const uint16_t superclass_size = superclass->rodata->instance_size;
             const int16_t start_delta = (int16_t)superclass_size - cls->rodata->instance_start;
             cls->rodata->instance_start = superclass_size;
-            cls->rodata->instance_size = superclass_size + start_delta;
 
 #if DEBUG_INIT
             printf("%s: %hd\n", cls->rodata->name, start_delta);
 #endif /* DEBUG_INIT */
 
-            // Fix up ivar offsets, if necessary.
+            // Fix up instance size and ivar offsets, if necessary.
             if (start_delta != 0) {
+                cls->rodata->instance_size += start_delta;
                 const struct ivar_list *const ivar_list = cls->rodata->ivars;
 
                 if (ivar_list) {
