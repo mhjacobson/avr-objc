@@ -118,13 +118,13 @@ static struct class_rw *class_getRWData(const Class cls, const BOOL creating) {
 static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _cmd) {
     const struct class_ro *const rodata = cls->rodata;
     const struct method_list *const method_list = rodata->methods;
-    const char *const name = rodata->name;
+    const struct class_rw *const rwdata = class_getRWData(cls, NO);
 
     IMP imp = 0;
 
-    if (method_list) {
-        for (int i = 0; i < method_list->element_count; i++) {
-            const struct method *const method = &method_list->methods[i];
+    if (rwdata) {
+        for (int i = 0; i < rwdata->num_added_methods; i++) {
+            const struct method *const method = &rwdata->added_methods[i];
 
             if (strcmp((char *)method->name, (char *)_cmd) == 0) {
                 imp = method->imp;
@@ -132,11 +132,9 @@ static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _
         }
     }
 
-    const struct class_rw *const rwdata = class_getRWData(cls, NO);
-
-    if (rwdata) {
-        for (int i = 0; i < rwdata->num_added_methods; i++) {
-            const struct method *const method = &rwdata->added_methods[i];
+    if (imp == 0 && method_list) {
+        for (int i = 0; i < method_list->element_count; i++) {
+            const struct method *const method = &method_list->methods[i];
 
             if (strcmp((char *)method->name, (char *)_cmd) == 0) {
                 imp = method->imp;
