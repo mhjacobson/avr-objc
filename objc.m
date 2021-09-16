@@ -126,7 +126,7 @@ static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _
         for (int i = 0; i < rwdata->num_added_methods; i++) {
             const struct method *const method = &rwdata->added_methods[i];
 
-            if (strcmp((char *)method->name, (char *)_cmd) == 0) {
+            if (strcmp((const char *)method->name, (const char *)_cmd) == 0) {
                 imp = method->imp;
             }
         }
@@ -136,7 +136,7 @@ static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _
         for (int i = 0; i < method_list->element_count; i++) {
             const struct method *const method = &method_list->methods[i];
 
-            if (strcmp((char *)method->name, (char *)_cmd) == 0) {
+            if (strcmp((const char *)method->name, (const char *)_cmd) == 0) {
                 imp = method->imp;
             }
         }
@@ -241,7 +241,8 @@ static void objc_install_category(const struct objc_category *const category) {
     
     if (instance_method_list) {
         for (int i = 0; i < instance_method_list->element_count; i++) {
-            class_addMethod(cls, instance_method_list->methods[i]);
+            const struct method *const method = &instance_method_list->methods[i];
+            class_addMethod(cls, *method);
         }
     }
 
@@ -250,7 +251,12 @@ static void objc_install_category(const struct objc_category *const category) {
     
     if (class_method_list) {
         for (int i = 0; i < class_method_list->element_count; i++) {
-            class_addMethod(metaclass, class_method_list->methods[i]);
+            const struct method *const method = &class_method_list->methods[i];
+
+            // Don't install +load.
+            if (strcmp((const char *)method->name, "load") != 0) {
+                class_addMethod(metaclass, *method);
+            }
         }
     }
 }
