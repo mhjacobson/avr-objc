@@ -311,8 +311,6 @@ static void objc_load_category(const struct objc_category *const category) {
     }
 }
 
-#if !USE_SYMTAB
-
 extern const Class classlist[]   __asm__("__OBJC_CLASSLIST_BEGIN");
 extern const Class classlist_end __asm__("__OBJC_CLASSLIST_END");
 
@@ -400,71 +398,6 @@ Class objc_getClass(const char *const name) {
 
     return Nil;
 }
-
-#else /* !USE_SYMTAB */
-
-#define MAX_SYMTABS 8
-static const struct objc_symtab *symtabs[MAX_SYMTABS];
-static unsigned short nsymtab;
-
-void objc_init_symtab(const struct objc_symtab *const symtab) {
-    if (nsymtab < MAX_SYMTABS) {
-        symtabs[nsymtab] = symtab;
-        nsymtab++;
-    } else {
-        printf("objc: too many symtabs!\n");
-        for (;;) ;
-    }
-
-    for (short i = 0; i < symtab->cls_def_cnt; i++) {
-        const Class cls = symtab->defs[i];
-        objc_setup_class(cls);
-
-#if DEBUG_INIT
-        printf("objc: setup class '%s'\n", cls->rodata->name);
-#endif /* DEBUG_INIT */
-    }
-
-    for (short i = 0; i < symtab->cat_def_cnt; i++) {
-        const struct objc_category *const category = symtab->defs[symtab->cls_def_cnt + i];
-        objc_install_category(category);
-
-#if DEBUG_INIT
-        printf("objc: installed category '%s'\n", category->name);
-#endif /* DEBUG_INIT */
-    }
-
-    for (short i = 0; i < symtab->cls_def_cnt; i++) {
-        const Class cls = symtab->defs[i];
-        objc_load_class(cls);
-
-#if DEBUG_INIT
-        printf("objc: loaded class '%s'\n", cls->rodata->name);
-#endif /* DEBUG_INIT */
-    }
-
-#if DEBUG_INIT
-    printf("objc: loaded symtab %p\n", symtab);
-#endif /* DEBUG_INIT */
-}
-
-Class objc_getClass(const char *const name) {
-    for (short i = 0; i < nsymtab; i++) {
-        const struct objc_symtab *const symtab = symtabs[i];
-
-        for (short j = 0; j < symtab->cls_def_cnt; j++) {
-            struct objc_class *const cls = symtab->defs[j];
-
-            if (!strcmp(name, cls->rodata->name)) {
-                return cls;
-            }
-        }
-    }
-
-    return Nil;
-}
-
-#endif /* !USE_SYMTAB */
 
 @implementation Object
 

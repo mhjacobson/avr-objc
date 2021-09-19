@@ -183,7 +183,6 @@ SECTIONS
 
     *(objc_classrefs)
     *(objc_selrefs)
-    /* *(objc_symtab) */
 
     __OBJC_CLASSLIST_BEGIN = .;
     KEEP(*(objc_classlist))
