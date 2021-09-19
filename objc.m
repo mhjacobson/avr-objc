@@ -11,9 +11,11 @@
 #include <stdio.h>
 #include <stddef.h>
 
-#define CLASS_SETUP  (1U << 0)
-#define CLASS_LOADED (1U << 1)
-#define CLASS_META   (1U << 2)
+// TODO: could use a separate set of 15 flags on the metaclass
+#define CLASS_META        (1U << 0)
+#define CLASS_SETUP       (1U << 1)
+#define CLASS_LOADED      (1U << 2)
+#define CLASS_INITIALIZED (1U << 3)
 
 struct objc_class {
     struct objc_class *isa;
@@ -108,12 +110,47 @@ struct class_rw {
     struct method added_methods[MAX_ADDED_METHODS];
 };
 
+#pragma mark -
+
+extern const Class classlist[]   __asm__("__OBJC_CLASSLIST_BEGIN");
+extern const Class classlist_end __asm__("__OBJC_CLASSLIST_END");
+
+extern const struct objc_category *catlist[]   __asm__("__OBJC_CATLIST_BEGIN");
+extern const struct objc_category *catlist_end __asm__("__OBJC_CATLIST_END");
+
+#pragma mark -
+
 static struct class_rw *class_getRWData(const Class cls, const BOOL creating) {
     if (creating && !cls->rwdata) {
         cls->rwdata = calloc(sizeof (struct class_rw), 1);
     }
 
     return cls->rwdata;
+}
+
+static Class class_getMetaClass(const Class cls) {
+    if (cls->flags & CLASS_META) {
+        return cls;
+    } else {
+        return cls->isa;
+    }
+}
+
+static Class class_getNonMetaClass(const Class cls) {
+    if ((cls->flags & CLASS_META) == 0) {
+        return cls;
+    } else {
+        // TODO: implement something nicer.  I didn't feel like forcing a rwdata for all metaclasses right now.
+        for (const Class *ptr = classlist; ptr < &classlist_end; ptr++) {
+            const Class c = *ptr;
+
+            if ((Class)c->isa == cls) {
+                return c;
+            }
+        }
+
+        return Nil;
+    }
 }
 
 static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _cmd) {
@@ -151,6 +188,20 @@ static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _
 }
 
 IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
+    // For now, always call +initialize on this path, since it's only used by messaging.
+    const Class metaclass = class_getMetaClass(cls);
+    const Class nonMetaClass = class_getNonMetaClass(cls);
+
+    if (!(nonMetaClass->flags & CLASS_INITIALIZED)) {
+        nonMetaClass->flags |= CLASS_INITIALIZED;
+
+        const IMP initializeIMP = class_lookupMethodIfPresent(metaclass, @selector(initialize));
+
+        if (initializeIMP) {
+            ((void (*)(Class, SEL))initializeIMP)(nonMetaClass, @selector(initialize));
+        }
+    }
+
     const IMP imp = class_lookupMethodIfPresent(cls, _cmd);
 
     if (imp == 0) {
@@ -310,12 +361,6 @@ static void objc_load_category(const struct objc_category *const category) {
         }
     }
 }
-
-extern const Class classlist[]   __asm__("__OBJC_CLASSLIST_BEGIN");
-extern const Class classlist_end __asm__("__OBJC_CLASSLIST_END");
-
-extern const struct objc_category *catlist[]   __asm__("__OBJC_CATLIST_BEGIN");
-extern const struct objc_category *catlist_end __asm__("__OBJC_CATLIST_END");
 
 // ISO C11, sec. 6.5.9.6
 // Two pointers compare equal if and only if both are null pointers, both are pointers to the
