@@ -207,6 +207,7 @@ IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
     if (imp == 0) {
         const BOOL meta = (cls->flags & CLASS_META) != 0;
         const char sigil = "-+"[meta]; // clang crashes with ternary
+        // <https://reviews.llvm.org/D95664>, <https://bugs.llvm.org/show_bug.cgi?id=48863>
 
         printf("objc: undeliverable message %c[%s %s] (cls=%p, _cmd=%p)\n", sigil, cls->rodata->name, (const char *)_cmd, cls, _cmd);
         for (;;) ;
