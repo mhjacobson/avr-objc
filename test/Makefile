@@ -34,7 +34,7 @@ build/%.o: %.c | build
 build/%.o: %.m | build
 	${CC} -c -o "$@" ${GENFLAGS} ${CFLAGS} ${OBJCFLAGS} $<
 
-build/objc-test: build/Test.o build/Protocols.o | build
+build/objc-test: build/Test.o build/Messaging.o build/Protocols.o | build
 	${CC} -o "$@" ${GENFLAGS} ${LDFLAGS} $^ ${LIBRARIES}
 
 build/objc-test.hex: build/objc-test | build
