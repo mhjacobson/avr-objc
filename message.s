@@ -156,6 +156,7 @@ __msgSend_stret_nonzero:
 
     ijmp
 
+.globl objc_msgSendSuper2_stret
 objc_msgSendSuper2_stret:
     ; return <- r25:r24
     ; objc_super <- r23:r22
