@@ -1,38 +1,67 @@
 #import "Test.h"
 #import <objc.h>
 
+typedef struct {
+    double x, y, z;
+} Point;
+
+static BOOL equalPoints(Point a, Point b) {
+    return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
 @interface MessagingFoo : Object
 
-- (int)transformValue:(int)value;
+- (int)transformInt:(int)value;
+- (Point)transformPoint:(Point)value;
+
+@end
+
+@interface MessagingBar : MessagingFoo
 
 @end
 
 @implementation MessagingFoo
 
-- (int)transformValue:(int)value {
+- (int)transformInt:(int)value {
     return value;
 }
 
-+ (int)transformValue:(int)value {
++ (int)transformInt:(int)value {
     return value + 10;
 }
 
-@end
+- (Point)transformPoint:(Point)value {
+    value.x++;
+    return value;
+}
 
-@interface MessagingBar : MessagingFoo {
-    int _intIvar;
++ (Point)transformPoint:(Point)value {
+    value.y++;
+    return value;
 }
 
 @end
 
 @implementation MessagingBar
 
-- (int)transformValue:(int)value {
-    return [super transformValue:value] + 100;
+- (int)transformInt:(int)value {
+    return [super transformInt:value] + 100;
 }
 
-+ (int)transformValue:(int)value {
-    return [super transformValue:value] + 100;
++ (int)transformInt:(int)value {
+    return [super transformInt:value] + 100;
+}
+
+- (Point)transformPoint:(Point)value {
+    value = [super transformPoint:value];
+    value.z++;
+    return value;
+}
+
++ (Point)transformPoint:(Point)value {
+    value = [super transformPoint:value];
+    value.z++;
+    return value;
 }
 
 @end
@@ -53,11 +82,17 @@
     MessagingBar *const bar = class_createInstance(BarClass);
     TEST_ASSERT(bar != nil);
 
-    TEST_ASSERT([foo transformValue:1] == 1);
-    TEST_ASSERT([bar transformValue:2] == 102);
+    TEST_ASSERT([foo transformInt:1] == 1);
+    TEST_ASSERT([bar transformInt:2] == 102);
 
-    TEST_ASSERT([MessagingFoo transformValue:3] == 13);
-    TEST_ASSERT([MessagingBar transformValue:4] == 114);
+    TEST_ASSERT([MessagingFoo transformInt:3] == 13);
+    TEST_ASSERT([MessagingBar transformInt:4] == 114);
+
+    TEST_ASSERT(equalPoints([foo transformPoint:(Point){1., 1., 1.}], (Point){2., 1., 1.}));
+    TEST_ASSERT(equalPoints([bar transformPoint:(Point){2., 2., 2.}], (Point){3., 2., 3.}));
+
+    TEST_ASSERT(equalPoints([MessagingFoo transformPoint:(Point){3., 3., 3.}], (Point){3., 4., 3.}));
+    TEST_ASSERT(equalPoints([MessagingBar transformPoint:(Point){4., 4., 4.}], (Point){4., 5., 5.}));
 }
 
 @end
