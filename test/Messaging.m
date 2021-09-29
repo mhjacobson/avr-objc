@@ -54,13 +54,10 @@
     TEST_ASSERT(bar != nil);
 
     TEST_ASSERT([foo transformValue:1] == 1);
+    TEST_ASSERT([bar transformValue:2] == 102);
 
-    printf("BarClass=%p, bar=%p, *bar=%p\n", BarClass, bar, *(Class *)bar);
-    [bar transformValue:2];
-    // TEST_ASSERT([bar transformValue:2] == 102);
-
-    // TEST_ASSERT([MessagingFoo transformValue:3] == 103);
-    // TEST_ASSERT([MessagingBar transformValue:4] == 114);
+    TEST_ASSERT([MessagingFoo transformValue:3] == 13);
+    TEST_ASSERT([MessagingBar transformValue:4] == 114);
 }
 
 @end
