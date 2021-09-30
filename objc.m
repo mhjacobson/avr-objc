@@ -17,6 +17,10 @@
 #define CLASS_LOADED      (1U << 2)
 #define CLASS_INITIALIZED (1U << 3)
 
+struct objc_object {
+    Class isa;
+};
+
 struct objc_class {
     struct objc_class *isa;
     struct objc_class *superclass;
@@ -47,14 +51,14 @@ struct class_ro {
     // GCC *does* add the field explicitly.
     // On LP64, adding it or not is irrelevant.  But on AVR, sizeof (unsigned int) == sizeof (uint8_t *),
     // and it matters.
-    // TODO: file a radar against GCC.
     // NOTE: this means that I have to compile Objective-C code either all with clang or all with GCC.
+    // Pending fix in GCC: <https://gcc.gnu.org/pipermail/gcc-patches/2021-September/579973.html>
     uint16_t reserved;
 #endif
     uint8_t *ivarLayout;
     char *name;
     struct method_list *methods;
-    void *protocols;
+    struct protocol_list *protocols;
     struct ivar_list *ivars;
     uint8_t *weakIvarLayout;
     struct property_list *properties;
@@ -88,22 +92,26 @@ struct ivar_list {
     struct ivar ivars[];
 };
 
+struct protocol_list {
+    // TODO: clang says `long`, and gcc says `intptr_t`.  Another bug in GCC: <https://gcc.gnu.org/pipermail/gcc-patches/2021-September/580280.html>
+    long count;
+    Protocol *list[];
+};
+
 struct objc_category {
     char *name;
     struct objc_class *cls;
     struct method_list *instanceMethods;
     struct method_list *classMethods;
-#if 0
-    struct protocol_list_t *protocols;
-    struct property_list_t *instanceProperties;
+    struct protocol_list *protocols;
+    struct property_list *instanceProperties;
     // Fields below this point are not always present.
-    struct property_list_t *_classProperties;
-#endif /* 0 */
+    struct property_list *_classProperties;
 };
 
 #pragma mark -
 
-#define MAX_ADDED_METHODS 16
+#define MAX_ADDED_METHODS 2
 
 struct class_rw {
     uint8_t num_added_methods;
@@ -117,6 +125,9 @@ extern const Class classlist_end __asm__("__OBJC_CLASSLIST_END");
 
 extern const struct objc_category *catlist[]   __asm__("__OBJC_CATLIST_BEGIN");
 extern const struct objc_category *catlist_end __asm__("__OBJC_CATLIST_END");
+
+extern Protocol *protolist[]   __asm__("__OBJC_PROTOLIST_BEGIN");
+extern Protocol *protolist_end __asm__("__OBJC_PROTOLIST_END");
 
 #pragma mark -
 
@@ -153,7 +164,7 @@ static Class class_getNonMetaClass(const Class cls) {
     }
 }
 
-static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _cmd) {
+static IMP class_lookupMethodIfPresent(const Class cls, const SEL _cmd) {
     const struct class_ro *const rodata = cls->rodata;
     const struct method_list *const method_list = rodata->methods;
     const struct class_rw *const rwdata = class_getRWData(cls, NO);
@@ -187,7 +198,7 @@ static IMP class_lookupMethodIfPresent(struct objc_class *const cls, const SEL _
     return imp;
 }
 
-IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
+IMP class_lookupMethod(const Class cls, const SEL _cmd) {
     // For now, always call +initialize on this path, since it's only used by messaging.
     const Class metaclass = class_getMetaClass(cls);
     const Class nonMetaClass = class_getNonMetaClass(cls);
@@ -216,14 +227,14 @@ IMP class_lookupMethod(struct objc_class *const cls, const SEL _cmd) {
     return imp;
 }
 
-const struct objc_class *class_getSuperclass(const struct objc_class *cls) {
+Class class_getSuperclass(const Class cls) {
     return cls->superclass;
 }
 
-id class_createInstance(Class cls) {
+id class_createInstance(const Class cls) {
     const size_t size = cls->rodata->instance_size;
     const id object = calloc(size, 1);
-    *(struct objc_class **)object = cls;
+    object_setClass(object, cls);
     return object;
 }
 
@@ -318,6 +329,8 @@ static void objc_install_category(const struct objc_category *const category) {
             }
         }
     }
+
+    // TODO: add category's protocol conformances
 }
 
 static void objc_load_class(const Class cls) {
@@ -390,7 +403,7 @@ static void objc_setup_classes(void) {
 
 static void objc_install_categories(void) {
     for (const struct objc_category **ptr = catlist; ptr != &catlist_end; ptr++) {
-        const struct objc_category *category = *ptr;
+        const struct objc_category *const category = *ptr;
         objc_install_category(category);
 
 #if DEBUG_INIT
@@ -412,11 +425,24 @@ static void objc_load_classes(void) {
 
 static void objc_load_categories(void) {
     for (const struct objc_category **ptr = catlist; ptr != &catlist_end; ptr++) {
-        const struct objc_category *category = *ptr;
+        const struct objc_category *const category = *ptr;
         objc_load_category(category);
 
 #if DEBUG_INIT
         printf("objc: loaded category '%s'\n", category->name);
+#endif /* DEBUG_INIT */
+    }
+}
+
+static void objc_setup_protocols(void) {
+    const Class ProtocolClass = [Protocol self];
+
+    for (Protocol **ptr = protolist; ptr != &protolist_end; ptr++) {
+        Protocol *const protocol = *ptr;
+        object_setClass(protocol, ProtocolClass);
+
+#if DEBUG_INIT
+        printf("objc: setup protocol '%s'\n", protocol->_name);
 #endif /* DEBUG_INIT */
     }
 }
@@ -427,6 +453,7 @@ static void objc_init(void) {
     objc_install_categories();
     objc_load_classes();
     objc_load_categories();
+    objc_setup_protocols();
 
 #if DEBUG_INIT
     printf("objc: initialized\n");
@@ -445,22 +472,119 @@ Class objc_getClass(const char *const name) {
     return Nil;
 }
 
+Class *objc_copyClassList(void) {
+    size_t n = 0;
+
+    for (const Class *ptr = classlist; ptr < &classlist_end; ptr++) {
+        n++;
+    }
+
+    Class *const list = malloc((n + 1) * sizeof (Class));
+    memcpy(list, classlist, n * sizeof (Class));
+    list[n] = Nil;
+
+    return list;
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-objc-isa-usage"
+
+Class object_getClass(const id object) {
+    return object->isa;
+}
+
+void object_setClass(const id object, const Class cls) {
+    object->isa = cls;
+}
+
+#pragma clang diagnostic pop
+
+const char *class_getName(const Class cls) {
+    return cls->rodata->name;
+}
+
+BOOL class_conformsToProtocol(const Class cls, const Protocol *const protocol) {
+    const struct protocol_list *const protocols = cls->rodata->protocols;
+
+    if (protocols != NULL) {
+        for (long i = 0; i < protocols->count; i++) {
+            const Protocol *const p = protocols->list[i];
+
+            if (protocol_conformsToProtocol(p, protocol)) {
+                return YES;
+            }
+        }
+    }
+
+    return NO;
+}
+
+const Protocol *objc_getProtocol(const char *const name) {
+    for (const Protocol **ptr = protolist; ptr < &protolist_end; ptr++) {
+        const Protocol *protocol = *ptr;
+
+        if (!strcmp(name, protocol->_name)) {
+            return protocol;
+        }
+    }
+
+    return nil;
+}
+
+BOOL protocol_conformsToProtocol(const Protocol *const conformer, const Protocol *const conformee) {
+    if (conformer == conformee) {
+        return YES;
+    } else {
+        const struct protocol_list *const protocols = conformer->_protocols;
+
+        if (protocols != NULL) {
+            for (long i = 0; i < protocols->count; i++) {
+                Protocol *const p = protocols->list[i];
+
+                if (protocol_conformsToProtocol(p, conformee)) {
+                    return YES;
+                }
+            }
+        }
+
+        return NO;
+    }
+}
+
 @implementation Object
 
-+ (Class)self {
+- (id)self {
     return self;
+}
+
+// Unlike NSObject, we let [SomeClass class] return the metaclass.
+- (Class)class {
+    return _isa;
+}
+
+- (BOOL)conformsToProtocol:(Protocol *const)protocol {
+    // class_conformsToProtocol() works fine when called on the metaclass.
+    return class_conformsToProtocol([self class], protocol);
 }
 
 @end
 
 @implementation Protocol
 
+- (const char *)name {
+    return _name;
+}
+
+- (BOOL)conformantClassesConformToProtocol:(Protocol *)conformee {
+    return protocol_conformsToProtocol(self, conformee);
+}
+
 @end
 
 @implementation Object (Description)
 
 + (const char *)description {
-    return ((Class)self)->rodata->name;
+    return class_getName(self);
 }
 
 - (const char *)copyDescription {

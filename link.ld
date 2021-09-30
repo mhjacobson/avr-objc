@@ -183,6 +183,7 @@ SECTIONS
 
     *(objc_classrefs)
     *(objc_selrefs)
+    *(objc_protorefs)
     *(objc_superrefs)
 
     __OBJC_CLASSLIST_BEGIN = .;
@@ -191,6 +192,9 @@ SECTIONS
     __OBJC_CATLIST_BEGIN = .;
     KEEP(*(objc_catlist))
     __OBJC_CATLIST_END = .;
+    __OBJC_PROTOLIST_BEGIN = .;
+    KEEP(*(objc_protolist))
+    __OBJC_PROTOLIST_END = .;
 
     /* END: OBJECTIVE-C ADDITIONS */
 
