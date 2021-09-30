@@ -16,7 +16,7 @@ endif
 
 LDFLAGS=-Wl,--gc-sections -Wl,--allow-multiple-definition -Wl,-T,../link.ld
 OBJCOPY=avr-objcopy
-MCU=atmega644p
+MCU=atmega1284
 
 .PHONY: all clean upload-%
 
