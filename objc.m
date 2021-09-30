@@ -111,7 +111,7 @@ struct objc_category {
 
 #pragma mark -
 
-#define MAX_ADDED_METHODS 2
+#define MAX_ADDED_METHODS 16
 
 struct class_rw {
     uint8_t num_added_methods;
