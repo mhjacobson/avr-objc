@@ -2,7 +2,7 @@
 #import <objc.h>
 
 typedef struct {
-    int x, y, z;
+    float x, y, z;
 } Point;
 
 static BOOL equalPoints(Point a, Point b) {
