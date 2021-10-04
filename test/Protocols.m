@@ -54,9 +54,6 @@
         // TEST_ASSERT([ProtocolsBar conformsToProtocol:@protocol(Proto)]);
         TEST_ASSERT([proto2 conformantClassesConformToProtocol:@protocol(Proto)]);
         TEST_ASSERT(![proto conformantClassesConformToProtocol:@protocol(Proto2)]);
-
-        printf("Tests passed.\n");
-        for (;;) ;
 }
 
 @end
