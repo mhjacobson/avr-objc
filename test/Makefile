@@ -10,7 +10,7 @@ ifdef GCC
 else
   GENFLAGS=-target avr -mmcu=${MCU} --sysroot /opt/local
   CFLAGS=--std=c11 -mdouble=64 -Os ${HEADER_SEARCH_PATHS} ${OTHER_CFLAGS}
-  OBJCFLAGS=-x objective-c -fobjc-runtime=macosx
+  OBJCFLAGS=-x objective-c -fobjc-runtime=macosx -Wno-objc-root-class
   CC=avr-clang
 endif
 
@@ -34,7 +34,7 @@ build/%.o: %.c | build
 build/%.o: %.m | build
 	${CC} -c -o "$@" ${GENFLAGS} ${CFLAGS} ${OBJCFLAGS} $<
 
-build/objc-test: build/Test.o build/Category.o build/Messaging.o build/Protocols.o | build
+build/objc-test: build/Test.o build/Category.o build/Ivar.o build/IvarFoo.o build/Messaging.o build/Protocols.o | build
 	${CC} -o "$@" ${GENFLAGS} ${LDFLAGS} $^ ${LIBRARIES}
 
 build/objc-test.hex: build/objc-test | build
