@@ -1,8 +1,8 @@
-#include "Test.h"
-#include <objc.h>
-#include <serial.h>
-#include <stdio.h>
-#include <avr/interrupt.h>
+#import "Test.h"
+#import <objc.h>
+#import <serial.h>
+#import <stdio.h>
+#import <avr/interrupt.h>
 
 __attribute__((constructor))
 void init_stdio(void) {

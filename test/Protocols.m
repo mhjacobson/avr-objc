@@ -1,5 +1,5 @@
-#include "Test.h"
-#include <objc.h>
+#import "Test.h"
+#import <objc.h>
 
 @protocol Proto
 @end
