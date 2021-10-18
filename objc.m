@@ -11,6 +11,16 @@
 #include <stdio.h>
 #include <stddef.h>
 
+#define CLASS_RO_META           (1U << 0)
+#define CLASS_RO_ROOT           (1U << 1)
+#define CLASS_RO_CXXSTRUCTORS   (1U << 2)
+#define CLASS_RO_HIDDEN         (1U << 4)
+#define CLASS_RO_EXCEPTION      (1U << 5)
+#define CLASS_RO_IVARRELEASER   (1U << 6)
+#define CLASS_RO_ARC            (1U << 7)
+#define CLASS_RO_CXXDESTRUCTOR  (1U << 8)
+#define CLASS_RO_MRCWEAK        (1U << 9)
+
 // TODO: could use a separate set of 15 flags on the metaclass
 #define CLASS_META        (1U << 0)
 #define CLASS_SETUP       (1U << 1)
