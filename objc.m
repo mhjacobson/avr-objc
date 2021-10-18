@@ -21,11 +21,10 @@
 #define CLASS_RO_CXXDESTRUCTOR  (1U << 8)
 #define CLASS_RO_MRCWEAK        (1U << 9)
 
-// TODO: could use a separate set of 15 flags on the metaclass
-#define CLASS_META        (1U << 0)
-#define CLASS_SETUP       (1U << 1)
-#define CLASS_LOADED      (1U << 2)
-#define CLASS_INITIALIZED (1U << 3)
+// TODO: could use a separate set of 16 flags on the metaclass
+#define CLASS_SETUP       (1U << 0)
+#define CLASS_LOADED      (1U << 1)
+#define CLASS_INITIALIZED (1U << 2)
 
 struct objc_object {
     Class isa;
@@ -162,7 +161,7 @@ static struct class_rw *class_getRWData(const Class cls, const BOOL creating) {
 }
 
 static Class class_getMetaClass(const Class cls) {
-    if (cls->flags & CLASS_META) {
+    if (cls->rodata->flags & CLASS_RO_META) {
         return cls;
     } else {
         return cls->isa;
@@ -170,7 +169,7 @@ static Class class_getMetaClass(const Class cls) {
 }
 
 static Class class_getNonMetaClass(const Class cls) {
-    if ((cls->flags & CLASS_META) == 0) {
+    if ((cls->rodata->flags & CLASS_RO_META) == 0) {
         return cls;
     } else {
         // TODO: implement something nicer.  I didn't feel like forcing a rwdata for all metaclasses right now.
@@ -238,7 +237,7 @@ IMP class_lookupMethod(const Class cls, const SEL _cmd) {
     const IMP imp = class_lookupMethodIfPresent(cls, _cmd);
 
     if (imp == 0) {
-        const BOOL meta = (cls->flags & CLASS_META) != 0;
+        const BOOL meta = (cls->rodata->flags & CLASS_RO_META) != 0;
         const char sigil = "-+"[meta]; // clang crashes with ternary
         // <https://reviews.llvm.org/D95664>, <https://bugs.llvm.org/show_bug.cgi?id=48863>
 
@@ -307,9 +306,6 @@ static void objc_setup_class(const Class cls) {
                 }
             }
         }
-
-        const Class metaclass = cls->isa;
-        metaclass->flags |= CLASS_META;
 
         cls->flags |= CLASS_SETUP;
     }
