@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stddef.h>
+#include <stddef.h> // can't use #import here because of the __need_ptrdiff_t (etc.) stupidity
 
 // rodata flags
 #define CLASS_RO_META           (1U << 0)
