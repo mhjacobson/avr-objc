@@ -51,11 +51,10 @@ struct objc_class {
 };
 
 struct class_ro {
-    // NOTE: GCC/clang emit these as `unsigned int`.
-    uint16_t flags;
-    uint16_t instance_start;
-    uint16_t instance_size;
-#if __GNUC__ && !__clang__
+    unsigned int flags;
+    unsigned int instance_start;
+    unsigned int instance_size;
+#if !__clang__
     // Well here's a shitty situation.
     // Clang's comments say there is an `unsigned int`-sized "reserved" member here, because 
     // when the objc4 modern runtime is used on LP64 platforms, there would otherwise be a 
@@ -84,24 +83,22 @@ struct method {
 };
 
 struct method_list {
-    // NOTE: GCC/clang emit these as `unsigned int`.
-    uint16_t element_size;
-    uint16_t element_count;
+    unsigned int element_size;
+    unsigned int element_count;
     struct method methods[];
 };
 
 struct ivar {
-    uint16_t *offset;
+    long *offset;
     char *name;
     char *type;
-    uint32_t alignment_raw;
-    uint32_t size;
+    unsigned int alignment_raw;
+    unsigned int size;
 };
 
 struct ivar_list {
-    // NOTE: GCC/clang emit these as `unsigned int`.
-    uint16_t element_size;
-    uint16_t element_count;
+    unsigned int element_size;
+    unsigned int element_count;
     struct ivar ivars[];
 };
 
@@ -111,15 +108,18 @@ struct property {
 };
 
 struct property_list {
-    // NOTE: GCC/clang emit these as `unsigned int`.
-    uint16_t element_size;
-    uint16_t element_count;
+    unsigned int element_size;
+    unsigned int element_count;
     struct property properties[];
 };
 
 struct protocol_list {
-    // TODO: clang says `long`, and gcc says `intptr_t`.  Another bug in GCC: <https://gcc.gnu.org/pipermail/gcc-patches/2021-September/580280.html>
+    // clang says `long`, and gcc says `intptr_t`.  Another bug in GCC: <https://gcc.gnu.org/pipermail/gcc-patches/2021-September/580280.html>
+#if __clang__
     long count;
+#else /* __clang__ */
+    intptr_t count;
+#endif /* __clang__ */
     Protocol *list[];
 };
 
@@ -132,6 +132,7 @@ struct objc_category {
     struct property_list *instanceProperties;
     // Fields below this point are not always present.
     struct property_list *_classProperties;
+    unsigned int size;
 };
 
 #pragma mark -
@@ -291,9 +292,9 @@ static void objc_setup_class(const Class cls) {
                 if (ivar_list) {
                     for (int i = 0; i < ivar_list->element_count; i++) {
                         const struct ivar *const ivar = &ivar_list->ivars[i];
-                        uint16_t *const offset = ivar->offset;
+                        long *const offset = ivar->offset;
 #if DEBUG_INIT
-                        printf("%s: %hu -> %hu\n", ivar->name, *offset, *offset + start_delta);
+                        printf("%s: %lu -> %lu\n", ivar->name, *offset, *offset + start_delta);
 #endif /* DEBUG_INIT */
                         *offset += start_delta;
                         // TODO: check that *offset + ivar_size <= instance_size ?
