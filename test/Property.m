@@ -7,6 +7,7 @@
 
 @property (nonatomic) int x;
 @property (nonatomic) char y;
+// TODO: property of object type
 
 @end
 
@@ -33,6 +34,18 @@
 @implementation PropertyBar
 
 @dynamic z;
+
+@end
+
+@interface PropertyBar (Category)
+
+@property (nonatomic) int w;
+
+@end
+
+@implementation PropertyBar (Category)
+
+@dynamic w;
 
 @end
 
@@ -75,13 +88,16 @@
     const Class PropertyBarClass = [PropertyBar self];
     const Property barX = class_getProperty(PropertyBarClass, "x");
     const Property barY = class_getProperty(PropertyBarClass, "y");
-
     TEST_ASSERT(x == barX);
     TEST_ASSERT(y == barY);
 
     const Property z = protocol_getProperty(@protocol(PropertyProto2), "z");
     TEST_ASSERT(z != NULL);
     TEST_ASSERT(!strcmp(property_getName(z), "z"));
+
+    const Property w = class_getProperty(PropertyBarClass, "w");
+    TEST_ASSERT(w != NULL);
+    TEST_ASSERT(!strcmp(property_getName(w), "w"));
 }
 
 @end

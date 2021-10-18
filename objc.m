@@ -137,11 +137,15 @@ struct objc_category {
 
 #pragma mark -
 
-#define MAX_ADDED_METHODS 16
+#define MAX_ADDED 16
 
 struct class_rw {
     uint8_t num_added_methods;
-    struct method added_methods[MAX_ADDED_METHODS];
+    uint8_t num_added_protocols;
+    uint8_t num_added_properties;
+    struct method added_methods[MAX_ADDED];
+    const Protocol *added_protocols[MAX_ADDED];
+    Property added_properties[MAX_ADDED];
 };
 
 #pragma mark -
@@ -188,7 +192,8 @@ static IMP class_lookupMethodIfPresent(const Class cls, const SEL _cmd) {
 
     IMP imp = 0;
 
-    if (rwdata) {
+    if (rwdata != NULL) {
+        // Look for an added method.
         for (int i = 0; i < rwdata->num_added_methods; i++) {
             const struct method *const method = &rwdata->added_methods[i];
 
@@ -199,6 +204,7 @@ static IMP class_lookupMethodIfPresent(const Class cls, const SEL _cmd) {
     }
 
     if (imp == 0 && method_list) {
+        // Look for a regular ol' method.
         for (int i = 0; i < method_list->element_count; i++) {
             const struct method *const method = &method_list->methods[i];
 
@@ -208,7 +214,7 @@ static IMP class_lookupMethodIfPresent(const Class cls, const SEL _cmd) {
         }
     }
 
-    if (imp == 0 && cls->superclass) {
+    if (imp == 0 && cls->superclass != NULL) {
         imp = class_lookupMethodIfPresent(cls->superclass, _cmd);
     }
 
@@ -313,7 +319,7 @@ static void objc_setup_class(const Class cls) {
 static void class_addMethod(const Class cls, const struct method method) {
     struct class_rw *const rwdata = class_getRWData(cls, YES);
 
-    if (rwdata->num_added_methods < MAX_ADDED_METHODS) {
+    if (rwdata->num_added_methods < MAX_ADDED) {
         rwdata->added_methods[rwdata->num_added_methods] = method;
         rwdata->num_added_methods++;
     } else {
@@ -322,8 +328,33 @@ static void class_addMethod(const Class cls, const struct method method) {
     }
 }
 
+static void class_addProtocol(const Class cls, const Protocol *const protocol) {
+    struct class_rw *const rwdata = class_getRWData(cls, YES);
+
+    if (rwdata->num_added_protocols < MAX_ADDED) {
+        rwdata->added_protocols[rwdata->num_added_protocols] = protocol;
+        rwdata->num_added_protocols++;
+    } else {
+        printf("objc: too many protocols added to '%s'\n", cls->rodata->name);
+        for (;;) ;
+    }
+}
+
+static void class_addProperty(const Class cls, const Property property) {
+    struct class_rw *const rwdata = class_getRWData(cls, YES);
+
+    if (rwdata->num_added_properties < MAX_ADDED) {
+        rwdata->added_properties[rwdata->num_added_properties] = property;
+        rwdata->num_added_properties++;
+    } else {
+        printf("objc: too many properties added to '%s'\n", cls->rodata->name);
+        for (;;) ;
+    }
+}
+
 static void objc_install_category(const struct objc_category *const category) {
     const Class cls = category->cls;
+
     const struct method_list *const instance_method_list = category->instanceMethods;
     
     if (instance_method_list) {
@@ -347,7 +378,23 @@ static void objc_install_category(const struct objc_category *const category) {
         }
     }
 
-    // TODO: add category's protocol conformances
+    const struct protocol_list *const protocol_list = category->protocols;
+
+    if (protocol_list) {
+        for (long i = 0; i < protocol_list->count; i++) {
+            const Protocol *const protocol = protocol_list->list[i];
+            class_addProtocol(cls, protocol);
+        }
+    }
+
+    const struct property_list *const property_list = category->instanceProperties;
+
+    if (property_list) {
+        for (int i = 0; i < property_list->element_count; i++) {
+            const Property property = &property_list->properties[i];
+            class_addProperty(cls, property);
+        }
+    }
 }
 
 static void objc_load_class(const Class cls) {
@@ -521,6 +568,28 @@ const char *class_getName(const Class cls) {
 }
 
 BOOL class_conformsToProtocol(const Class cls, const Protocol *const protocol) {
+    // Protocol conformances are added to the non-meta class, so specifically get *its* rwdata.
+
+    // TODO: What if a protocol conformance is explicitly added to the metaclass?
+    // Does that even make any sense (given that protocols can include class methods?)
+    // I don't think objc4 handles this at all -- their class_addProtocol() implementations
+    // simply ask: "fixme metaclass?".
+
+    const Class nonMetaClass = class_getNonMetaClass(cls);
+    const struct class_rw *const rwdata = class_getRWData(nonMetaClass, NO);
+
+    if (rwdata != NULL) {
+        // Look for an added protocol conformance.
+        for (int i = 0; i < rwdata->num_added_protocols; i++) {
+            const Protocol *const p = rwdata->added_protocols[i];
+
+            if (protocol_conformsToProtocol(p, protocol)) {
+                return YES;
+            }
+        }
+    }
+
+    // Look for a regular ol' protocol conformance.
     const struct protocol_list *const protocols = cls->rodata->protocols;
 
     if (protocols != NULL) {
@@ -569,25 +638,43 @@ BOOL protocol_conformsToProtocol(const Protocol *const conformer, const Protocol
 }
 
 Property class_getProperty(const Class cls, const char *const name) {
-    struct property_list *const property_list = cls->rodata->properties;
+    Property property = NULL;
 
-    if (property_list != NULL) {
-        for (int i = 0; i < property_list->element_count; i++) {
-            const Property p = &property_list->properties[i];
+    const struct class_rw *const rwdata = class_getRWData(cls, NO);
+
+    if (rwdata != NULL) {
+        // Look for an added property.
+        for (int i = 0; i < rwdata->num_added_properties; i++) {
+            const Property p = rwdata->added_properties[i];
 
             if (!strcmp(p->name, name)) {
-                return p;
+                property = p;
+                break;
             }
         }
     }
 
-    // TODO: check categories
+    if (property == NULL) {
+        // Look for a regular ol' property.
+        struct property_list *const property_list = cls->rodata->properties;
 
-    if (cls->superclass) {
+        if (property_list != NULL) {
+            for (int i = 0; i < property_list->element_count; i++) {
+                const Property p = &property_list->properties[i];
+
+                if (!strcmp(p->name, name)) {
+                    property = p;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (property == NULL && cls->superclass != NULL) {
         return class_getProperty(cls->superclass, name);
     }
 
-    return NULL;
+    return property;
 }
 
 Property protocol_getProperty(const Protocol *const protocol, const char *const name) {

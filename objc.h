@@ -13,7 +13,7 @@ typedef struct objc_object *id;
 typedef struct objc_selector *SEL;
 typedef struct objc_class *Class;
 @class Protocol;
-typedef struct property *Property;
+typedef const struct property *Property;
 typedef id (*IMP)(id, SEL, ...);
 typedef _Bool BOOL;
 #define YES 1
