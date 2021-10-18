@@ -92,6 +92,18 @@ struct ivar_list {
     struct ivar ivars[];
 };
 
+struct property {
+    const char *name;
+    const char *attributes;
+};
+
+struct property_list {
+    // NOTE: GCC/clang emit these as `unsigned int`.
+    uint16_t element_size;
+    uint16_t element_count;
+    struct property properties[];
+};
+
 struct protocol_list {
     // TODO: clang says `long`, and gcc says `intptr_t`.  Another bug in GCC: <https://gcc.gnu.org/pipermail/gcc-patches/2021-September/580280.html>
     long count;
@@ -549,6 +561,104 @@ BOOL protocol_conformsToProtocol(const Protocol *const conformer, const Protocol
 
         return NO;
     }
+}
+
+Property class_getProperty(const Class cls, const char *const name) {
+    struct property_list *const property_list = cls->rodata->properties;
+
+    if (property_list != NULL) {
+        for (int i = 0; i < property_list->element_count; i++) {
+            const Property p = &property_list->properties[i];
+
+            if (!strcmp(p->name, name)) {
+                return p;
+            }
+        }
+    }
+
+    // TODO: check categories
+
+    return NULL;
+}
+
+Property protocol_getProperty(const Protocol *const protocol, const char *const name) {
+    struct property_list *const property_list = protocol->_instanceProperties;
+
+    if (property_list != NULL) {
+        for (int i = 0; i < property_list->element_count; i++) {
+            const Property p = &property_list->properties[i];
+
+            if (!strcmp(p->name, name)) {
+                return p;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+const char *property_getName(const Property property) {
+    return property->name;
+}
+
+const char *property_getAttributes(const Property property) {
+    return property->attributes;
+}
+
+/*
+ * Property attribute string format:
+ *   - Comma-separated name-value pairs
+ *   - Name and value may not contain ','
+ *   - Name may not contain '"'
+ *   - Value may be empty
+ *   - Name is:
+ *     - single char (value follows), or
+ *     - double-quoted string of 2+ chars (value follows closing quote)
+ */
+char *property_copyAttributeValue(const Property property, const char *const attributeName) {
+    const char *attributes = property_getAttributes(property);
+    char *value = NULL;
+
+    while (*attributes != '\0') {
+        BOOL isQuotedName = NO;
+        size_t nameLen = 1;
+
+        // Detect quoted name.
+        if (*attributes == '"') {
+            attributes++;
+            isQuotedName = YES;
+
+            nameLen = strcspn(attributes, "\"");
+        }
+
+        // Compare name to requested name.
+        const int cmp = strncmp(attributes, attributeName, nameLen);
+        attributes += nameLen;
+
+        // Skip closing quote if needed.
+        if (isQuotedName) {
+            attributes++;
+        }
+
+        // The value ends at the next ',' or '\0'.
+        const size_t valueLen = strcspn(attributes, ",");
+
+        // If name matched, copy and return value.  Otherwise, skip value.
+        if (cmp == 0) {
+            value = malloc(valueLen + 1);
+            strncpy(value, attributes, valueLen);
+            value[valueLen] = '\0';
+            break;
+        } else {
+            attributes += valueLen;
+
+            if (*attributes == ',') {
+                attributes++;
+            }
+        }
+    }
+
+    return value;
 }
 
 @implementation Object

@@ -13,6 +13,7 @@ typedef struct objc_object *id;
 typedef struct objc_selector *SEL;
 typedef struct objc_class *Class;
 @class Protocol;
+typedef struct property *Property;
 typedef id (*IMP)(id, SEL, ...);
 typedef _Bool BOOL;
 #define YES 1
@@ -32,6 +33,25 @@ BOOL class_conformsToProtocol(Class cls, const Protocol *protocol);
 
 const Protocol *objc_getProtocol(const char *const name);
 BOOL protocol_conformsToProtocol(const Protocol *conformer, const Protocol *conformee);
+
+Property class_getProperty(Class cls, const char *name);
+Property protocol_getProperty(const Protocol *protocol, const char *name);
+
+const char *property_getName(Property property);
+const char *property_getAttributes(Property property);
+
+#define PROPERTY_READONLY "R"
+#define PROPERTY_COPY "C"
+#define PROPERTY_STRONG "&"
+#define PROPERTY_WEAK "W"
+#define PROPERTY_DYNAMIC "D"
+#define PROPERTY_GETTER "G"
+#define PROPERTY_SETTER "S"
+#define PROPERTY_IVAR "V"
+#define PROPERTY_TYPE "T"
+#define PROPERTY_NONATOMIC "N"
+
+char *property_copyAttributeValue(Property property, const char *attributeName);
 
 #if __OBJC__
 
