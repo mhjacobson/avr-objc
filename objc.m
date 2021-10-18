@@ -592,18 +592,36 @@ Property class_getProperty(const Class cls, const char *const name) {
 
 Property protocol_getProperty(const Protocol *const protocol, const char *const name) {
     struct property_list *const property_list = protocol->_instanceProperties;
+    Property property = NULL;
 
     if (property_list != NULL) {
         for (int i = 0; i < property_list->element_count; i++) {
             const Property p = &property_list->properties[i];
 
             if (!strcmp(p->name, name)) {
-                return p;
+                property = p;
+                break;
             }
         }
     }
 
-    return NULL;
+    if (property == NULL) {
+        // Check conformed protocols.
+        const struct protocol_list *const protocols = protocol->_protocols;
+
+        if (protocols != NULL) {
+            for (long i = 0; i < protocols->count; i++) {
+                const Property p = protocol_getProperty(protocols->list[i], name);
+
+                if (p != NULL) {
+                    property = p;
+                    break;
+                }
+            }
+        }
+    }
+
+    return property;
 }
 
 const char *property_getName(const Property property) {

@@ -17,10 +17,23 @@
 
 @end
 
-@interface PropertyBar : PropertyFoo
+@protocol PropertyProto
+
+@property (nonatomic) int z;
+
+@end
+
+@protocol PropertyProto2 <PropertyProto>
+
+@end
+
+@interface PropertyBar : PropertyFoo <PropertyProto2>
 @end
 
 @implementation PropertyBar
+
+@dynamic z;
+
 @end
 
 @interface TestProperty <Test>
@@ -65,6 +78,10 @@
 
     TEST_ASSERT(x == barX);
     TEST_ASSERT(y == barY);
+
+    const Property z = protocol_getProperty(@protocol(PropertyProto2), "z");
+    TEST_ASSERT(z != NULL);
+    TEST_ASSERT(!strcmp(property_getName(z), "z"));
 }
 
 @end
