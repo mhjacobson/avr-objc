@@ -583,6 +583,10 @@ Property class_getProperty(const Class cls, const char *const name) {
 
     // TODO: check categories
 
+    if (cls->superclass) {
+        return class_getProperty(cls->superclass, name);
+    }
+
     return NULL;
 }
 

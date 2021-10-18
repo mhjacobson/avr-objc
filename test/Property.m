@@ -17,6 +17,12 @@
 
 @end
 
+@interface PropertyBar : PropertyFoo
+@end
+
+@implementation PropertyBar
+@end
+
 @interface TestProperty <Test>
 @end
 
@@ -52,6 +58,13 @@
     TEST_ASSERT(yIvarValue == NULL);
     free(xIvarValue);
     free(yIvarValue);
+
+    const Class PropertyBarClass = [PropertyBar self];
+    const Property barX = class_getProperty(PropertyBarClass, "x");
+    const Property barY = class_getProperty(PropertyBarClass, "y");
+
+    TEST_ASSERT(x == barX);
+    TEST_ASSERT(y == barY);
 }
 
 @end
