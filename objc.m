@@ -186,11 +186,9 @@ static Class class_getNonMetaClass(const Class cls) {
 }
 
 static IMP class_lookupMethodIfPresent(const Class cls, const SEL _cmd) {
-    const struct class_ro *const rodata = cls->rodata;
-    const struct method_list *const method_list = rodata->methods;
-    const struct class_rw *const rwdata = class_getRWData(cls, NO);
-
     IMP imp = 0;
+
+    const struct class_rw *const rwdata = class_getRWData(cls, NO);
 
     if (rwdata != NULL) {
         // Look for an added method.
@@ -203,18 +201,23 @@ static IMP class_lookupMethodIfPresent(const Class cls, const SEL _cmd) {
         }
     }
 
-    if (imp == 0 && method_list) {
+    if (imp == 0) {
         // Look for a regular ol' method.
-        for (int i = 0; i < method_list->element_count; i++) {
-            const struct method *const method = &method_list->methods[i];
+        const struct method_list *const method_list = cls->rodata->methods;
 
-            if (strcmp((const char *)method->name, (const char *)_cmd) == 0) {
-                imp = method->imp;
+        if (method_list != NULL) {
+            for (int i = 0; i < method_list->element_count; i++) {
+                const struct method *const method = &method_list->methods[i];
+
+                if (strcmp((const char *)method->name, (const char *)_cmd) == 0) {
+                    imp = method->imp;
+                }
             }
         }
     }
 
     if (imp == 0 && cls->superclass != NULL) {
+        // Look for a superclass method.
         imp = class_lookupMethodIfPresent(cls->superclass, _cmd);
     }
 
@@ -589,10 +592,10 @@ BOOL class_conformsToProtocol(const Class cls, const Protocol *const protocol) {
         }
     }
 
-    // Look for a regular ol' protocol conformance.
     const struct protocol_list *const protocols = cls->rodata->protocols;
 
     if (protocols != NULL) {
+        // Look for a regular ol' protocol conformance.
         for (long i = 0; i < protocols->count; i++) {
             const Protocol *const p = protocols->list[i];
 
@@ -600,6 +603,11 @@ BOOL class_conformsToProtocol(const Class cls, const Protocol *const protocol) {
                 return YES;
             }
         }
+    }
+
+    // Look for a superclass protocol conformance.
+    if (cls->superclass != NULL) {
+        return class_conformsToProtocol(cls->superclass, protocol);
     }
 
     return NO;
@@ -671,6 +679,7 @@ Property class_getProperty(const Class cls, const char *const name) {
     }
 
     if (property == NULL && cls->superclass != NULL) {
+        // Look for a superclass property.
         return class_getProperty(cls->superclass, name);
     }
 

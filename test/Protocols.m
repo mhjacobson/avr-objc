@@ -31,7 +31,11 @@
 @implementation ProtocolsBaz
 @end
 
-// TODO: subclass Foo and see if subclass conforms to Proto
+@interface ProtocolsQuux : ProtocolsFoo
+@end
+
+@implementation ProtocolsQuux
+@end
 
 @interface TestProtocols <Test>
 @end
@@ -41,6 +45,9 @@
 + (void)run {
         TEST_ASSERT(class_conformsToProtocol([ProtocolsFoo self], @protocol(Proto)));
         TEST_ASSERT(class_conformsToProtocol([ProtocolsBar self], @protocol(Proto)));
+        TEST_ASSERT(class_conformsToProtocol([ProtocolsBaz self], @protocol(Proto)));
+        TEST_ASSERT(class_conformsToProtocol([ProtocolsQuux self], @protocol(Proto)));
+        TEST_ASSERT(!class_conformsToProtocol([ProtocolsQuux self], @protocol(Proto2)));
         TEST_ASSERT(protocol_conformsToProtocol(@protocol(Proto2), @protocol(Proto)));
         TEST_ASSERT(!protocol_conformsToProtocol(@protocol(Proto), @protocol(Proto2)));
 
@@ -54,6 +61,9 @@
 
         TEST_ASSERT([ProtocolsFoo conformsToProtocol:@protocol(Proto)]);
         TEST_ASSERT([ProtocolsBar conformsToProtocol:@protocol(Proto)]);
+        TEST_ASSERT([ProtocolsBaz conformsToProtocol:@protocol(Proto)]);
+        TEST_ASSERT([ProtocolsQuux conformsToProtocol:@protocol(Proto)]);
+        TEST_ASSERT(![ProtocolsQuux conformsToProtocol:@protocol(Proto2)]);
         TEST_ASSERT([proto2 conformantClassesConformToProtocol:@protocol(Proto)]);
         TEST_ASSERT(![proto conformantClassesConformToProtocol:@protocol(Proto2)]);
 }
