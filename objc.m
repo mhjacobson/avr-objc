@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stddef.h>
 
+// rodata flags
 #define CLASS_RO_META           (1U << 0)
 #define CLASS_RO_ROOT           (1U << 1)
 #define CLASS_RO_CXXSTRUCTORS   (1U << 2)
@@ -21,7 +22,7 @@
 #define CLASS_RO_CXXDESTRUCTOR  (1U << 8)
 #define CLASS_RO_MRCWEAK        (1U << 9)
 
-// TODO: could use a separate set of 16 flags on the metaclass
+// class flags (for non-meta classes)
 #define CLASS_SETUP       (1U << 0)
 #define CLASS_LOADED      (1U << 1)
 #define CLASS_INITIALIZED (1U << 2)
@@ -39,7 +40,10 @@ struct objc_class {
     void *cache;
     void *vtable;
 #endif /* 0 */
-    uintptr_t flags; // void *cache;
+    union {
+        uintptr_t flags;
+        Class nonmeta;
+    }; // void *cache;
     struct class_rw *rwdata; // void *vtable;
 
     // NOTE: the Apple runtime replaces this with a class_data_bits_t, which is the rw data pointer plus some flags in the unused bits.
@@ -172,16 +176,7 @@ static Class class_getNonMetaClass(const Class cls) {
     if ((cls->rodata->flags & CLASS_RO_META) == 0) {
         return cls;
     } else {
-        // TODO: implement something nicer.  I didn't feel like forcing a rwdata for all metaclasses right now.
-        for (const Class *ptr = classlist; ptr < &classlist_end; ptr++) {
-            const Class c = *ptr;
-
-            if ((Class)c->isa == cls) {
-                return c;
-            }
-        }
-
-        return Nil;
+        return cls->nonmeta;
     }
 }
 
@@ -306,6 +301,9 @@ static void objc_setup_class(const Class cls) {
                 }
             }
         }
+
+        const Class metaclass = cls->isa;
+        metaclass->nonmeta = cls;
 
         cls->flags |= CLASS_SETUP;
     }
