@@ -274,28 +274,33 @@ void object_destroy(id object) {
 }
 
 id objc_retain(id object) {
-    uint8_t *const rc = (uint8_t *)((char *)object - sizeof (uint8_t));
+    if (object != nil) {
+        uint8_t *const rc = (uint8_t *)((char *)object - sizeof (uint8_t));
 
-    if (*rc < UINT8_MAX) {
-        (*rc)++;
+        if (*rc < UINT8_MAX) {
+            (*rc)++;
+        }
     }
 
     return object;
 }
 
 void objc_release(id object) {
-    uint8_t *const rc = (uint8_t *)((char *)object - sizeof (uint8_t));
+    if (object != nil) {
+        uint8_t *const rc = (uint8_t *)((char *)object - sizeof (uint8_t));
 
-    if (*rc == 0) {
-        const IMP deallocIMP = class_lookupMethodIfPresent(object_getClass(object), @selector(dealloc));
+        if (*rc == 0) {
+            const IMP deallocIMP = class_lookupMethodIfPresent(object_getClass(object), @selector(dealloc));
 
-        if (deallocIMP) { // `deallocIMP != NULL` crashed clang
-            ((void (*)(id, SEL))deallocIMP)(object, @selector(dealloc));
-        } else {
-            object_destroy(object);
+            if (deallocIMP) { // `deallocIMP != NULL` crashed clang
+                ((void (*)(id, SEL))deallocIMP)(object, @selector(dealloc));
+            } else {
+                object_destroy(object);
+            }
+        } else if (*rc < UINT8_MAX) {
+            // *rc == UINT8_MAX means the object is immortal.
+            (*rc)--;
         }
-    } else if (*rc < UINT8_MAX) {
-        (*rc)--;
     }
 }
 
