@@ -22,6 +22,11 @@ typedef _Bool BOOL;
 #define Nil ((Class)0)
 
 id class_createInstance(Class cls);
+void object_destroy(id object);
+
+id objc_retain(id object);
+void objc_release(id object);
+
 Class objc_getClass(const char *name);
 Class *objc_copyClassList(void);
 

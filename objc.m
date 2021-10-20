@@ -258,10 +258,45 @@ Class class_getSuperclass(const Class cls) {
 }
 
 id class_createInstance(const Class cls) {
-    const size_t size = cls->rodata->instance_size;
-    const id object = calloc(size, 1);
+    const size_t size = sizeof (uint8_t) + cls->rodata->instance_size;
+    char *const buffer = calloc(size, 1);
+    const id object = (id)(buffer + sizeof (uint8_t));
     object_setClass(object, cls);
+    uint8_t *const rc = (uint8_t *)buffer;
+    *rc = 0;
     return object;
+}
+
+void object_destroy(id object) {
+    object_setClass(object, Nil);
+    char *const buffer = (char *)object - sizeof (uint8_t);
+    free(buffer);
+}
+
+id objc_retain(id object) {
+    uint8_t *const rc = (uint8_t *)((char *)object - sizeof (uint8_t));
+
+    if (*rc < UINT8_MAX) {
+        (*rc)++;
+    }
+
+    return object;
+}
+
+void objc_release(id object) {
+    uint8_t *const rc = (uint8_t *)((char *)object - sizeof (uint8_t));
+
+    if (*rc == 0) {
+        const IMP deallocIMP = class_lookupMethodIfPresent(object_getClass(object), @selector(dealloc));
+
+        if (deallocIMP) { // `deallocIMP != NULL` crashed clang
+            ((void (*)(id, SEL))deallocIMP)(object, @selector(dealloc));
+        } else {
+            object_destroy(object);
+        }
+    } else if (*rc < UINT8_MAX) {
+        (*rc)--;
+    }
 }
 
 // Comment from objc4:
@@ -416,7 +451,7 @@ static void objc_load_class(const Class cls) {
         const IMP loadIMP = class_lookupMethodIfPresent(metaclass, load);
 
         if (loadIMP) {
-            loadIMP(cls, load);
+            ((void (*)(Class, SEL))loadIMP)(cls, load);
         }
 
         cls->flags |= CLASS_LOADED;
@@ -436,7 +471,7 @@ static void objc_load_category(const struct objc_category *const category) {
                 const SEL load = @selector(load);
                 const IMP loadIMP = method->imp;
 
-                loadIMP(cls, load);
+                ((void (*)(Class, SEL))loadIMP)(cls, load);
                 break;
             }
         }
