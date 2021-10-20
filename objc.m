@@ -304,17 +304,6 @@ void objc_release(id object) {
     }
 }
 
-// Comment from objc4:
-#if 0
-// This entry point was designed wrong.  When used as a getter, src needs to be locked so that
-// if simultaneously used for a setter then there would be contention on src.
-// So we need two locks - one of which will be contended.
-#endif /* 0 */
-// For now, we don't care about atomic properties and just copy the bits over.
-void objc_copyStruct(void *dest, const void *src, ptrdiff_t size, BOOL atomic, BOOL hasStrong) {
-    memmove(dest, src, size);
-}
-
 static void objc_setup_class(const Class cls) {
     if (!(cls->flags & CLASS_SETUP)) {
         // In an environment with no dynamic linking, we don't have to worry about things like subclasses
@@ -822,6 +811,26 @@ char *property_copyAttributeValue(const Property property, const char *const att
     }
 
     return value;
+}
+
+// For now, we don't care about atomic properties and just copy the bits over.
+void objc_copyStruct(void *const dst, const void *const src, const ptrdiff_t size, const BOOL atomic, const BOOL hasStrong) {
+    memmove(dst, src, size);
+}
+
+id objc_getProperty(const id self, const SEL _cmd, const ptrdiff_t offset, const BOOL atomic) {
+    const id *const location = (id *)((char *)self + offset);
+    const id object = *location;
+    // TODO: retain-autorelease, once we have autorelease pools.
+    return object;
+}
+
+void objc_setProperty(const id self, const SEL _cmd, const ptrdiff_t offset, const id newValue, const BOOL atomic, const BOOL shouldCopy) {
+    id *const location = (id *)((char *)self + offset);
+    const id oldValue = *location;
+    objc_release(oldValue);
+    // TODO: copy if requested
+    *location = objc_retain(newValue);
 }
 
 @implementation Object

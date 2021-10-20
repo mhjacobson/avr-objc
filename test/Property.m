@@ -7,7 +7,7 @@
 
 @property (nonatomic) int x;
 @property (nonatomic) char y;
-// TODO: property of object type
+@property (strong) Object *object;
 
 @end
 
@@ -15,6 +15,7 @@
 
 @synthesize x=_x;
 @dynamic y;
+@synthesize object=_object;
 
 @end
 
