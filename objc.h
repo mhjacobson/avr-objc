@@ -26,6 +26,7 @@ void object_destroy(id object);
 
 id objc_retain(id object);
 void objc_release(id object);
+id objc_autorelease(id object);
 
 Class objc_getClass(const char *name);
 Class *objc_copyClassList(void);

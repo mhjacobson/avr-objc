@@ -5,11 +5,12 @@
  */
 
 #include "objc.h"
+#include <assert.h>
 #include <stdint.h>
-#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stddef.h> // can't use #import here because of the __need_ptrdiff_t (etc.) stupidity
+#include <string.h>
 
 // rodata flags
 #define CLASS_RO_META           (1U << 0)
@@ -302,6 +303,69 @@ void objc_release(id object) {
             (*rc)--;
         }
     }
+}
+
+#define OBJECTS_PER_PAGE 32
+static struct pool_page *top_page;
+#define POOL_MARKER UINTPTR_MAX
+
+struct pool_page {
+    uintptr_t objects[OBJECTS_PER_PAGE];
+    uint8_t object_count;
+    struct pool_page *next;
+};
+
+static void objc_autoreleasePoolAppend(const uintptr_t value) {
+    // Ensure there's space for a new value.
+    if (top_page == NULL) {
+        top_page = malloc(sizeof (struct pool_page));
+        top_page->object_count = 0;
+        top_page->next = NULL;
+    } else if (top_page->object_count == OBJECTS_PER_PAGE) {
+        struct pool_page *const next_page = top_page;
+        top_page = malloc(sizeof (struct pool_page));
+        top_page->object_count = 0;
+        top_page->next = next_page;
+    }
+
+    // Append the new value.
+    top_page->objects[top_page->object_count] = value;
+    top_page->object_count++;
+}
+
+// TODO: should I be doing something intelligent with these markers?
+
+void *objc_autoreleasePoolPush(void) {
+    objc_autoreleasePoolAppend(POOL_MARKER);
+    return NULL;
+}
+
+void objc_autoreleasePoolPop(void *marker) {
+    // Release objects until we see POOL_MARKER.
+    for (;;) {
+        const uintptr_t object = top_page->objects[top_page->object_count - 1];
+
+        // Discard newly empty page if necessary.
+        if (top_page->object_count == 1) {
+            struct pool_page *const empty_page = top_page;
+            top_page = top_page->next;
+            free(empty_page);
+        } else {
+            top_page->object_count--;
+        }
+
+        if (object == POOL_MARKER) {
+            break;
+        } else {
+            objc_release((id)object);
+        }
+    }
+}
+
+id objc_autorelease(const id object) {
+    assert((uintptr_t)object != POOL_MARKER);
+    objc_autoreleasePoolAppend((uintptr_t)object);
+    return object;
 }
 
 static void objc_setup_class(const Class cls) {
@@ -821,8 +885,7 @@ void objc_copyStruct(void *const dst, const void *const src, const ptrdiff_t siz
 id objc_getProperty(const id self, const SEL _cmd, const ptrdiff_t offset, const BOOL atomic) {
     const id *const location = (id *)((char *)self + offset);
     const id object = *location;
-    // TODO: retain-autorelease, once we have autorelease pools.
-    return object;
+    return objc_autorelease(objc_retain(object));
 }
 
 void objc_setProperty(const id self, const SEL _cmd, const ptrdiff_t offset, const id newValue, const BOOL atomic, const BOOL shouldCopy) {
@@ -873,6 +936,33 @@ void objc_setProperty(const id self, const SEL _cmd, const ptrdiff_t offset, con
     char *const description = malloc(30);
     snprintf(description, 30, "<%s: %p>", [self->_isa description], self);
     return description;
+}
+
+@end
+
+// clang uses this at runtime for @autoreleasepool {}
+__attribute__((objc_root_class))
+@interface NSAutoreleasePool
+
++ (id)alloc;
++ (id)init;
++ (void)drain;
+
+@end
+
+@implementation NSAutoreleasePool
+
++ (id)alloc {
+    return (id)self;
+}
+
++ (id)init {
+    objc_autoreleasePoolPush();
+    return (id)self;
+}
+
++ (void)drain {
+    objc_autoreleasePoolPop(NULL);
 }
 
 @end

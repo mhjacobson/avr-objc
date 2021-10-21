@@ -63,6 +63,16 @@
     }
 
     TEST_ASSERT(!didDealloc);
+
+    didDealloc = NO;
+    RefCountFoo *const foo4 = class_createInstance([RefCountFoo self]);
+    [foo4 setDidDeallocPointer:&didDealloc];
+
+    @autoreleasepool {
+        objc_autorelease(foo4);
+    }
+
+    TEST_ASSERT(didDealloc);
 }
 
 @end
