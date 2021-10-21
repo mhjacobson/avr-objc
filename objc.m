@@ -536,13 +536,17 @@ static void objc_load_category(const struct objc_category *const category) {
     }
 }
 
-// ISO C11, sec. 6.5.9.6
-// Two pointers compare equal if and only if both are null pointers, both are pointers to the
+// ISO C11, sec. 6.5.9.{6,7}
+// 6. Two pointers compare equal if and only if both are null pointers, both are pointers to the
 // same object (including a pointer to an object and a subobject at its beginning) or function,
 // both are pointers to one past the last element of the same array object, or one is a pointer
 // to one past the end of one array object and the other is a pointer to the start of a different
 // array object that happens to immediately follow the first array object in the address
 // space. [109]
+//
+// 7. For the purposes of these operators, a pointer to an object that is not an element of an
+// array behaves the same as a pointer to the first element of an array of length one with the type
+// of the object as its element type.
 //
 // [109]:
 // Two objects may be adjacent in memory because they are adjacent elements of a larger array or
@@ -621,7 +625,7 @@ static void objc_init(void) {
 }
 
 Class objc_getClass(const char *const name) {
-    for (const Class *ptr = classlist; ptr < &classlist_end; ptr++) {
+    for (const Class *ptr = classlist; ptr != &classlist_end; ptr++) {
         const Class cls = *ptr;
 
         if (!strcmp(name, cls->rodata->name)) {
@@ -635,7 +639,7 @@ Class objc_getClass(const char *const name) {
 Class *objc_copyClassList(void) {
     size_t n = 0;
 
-    for (const Class *ptr = classlist; ptr < &classlist_end; ptr++) {
+    for (const Class *ptr = classlist; ptr != &classlist_end; ptr++) {
         n++;
     }
 
@@ -707,7 +711,7 @@ BOOL class_conformsToProtocol(const Class cls, const Protocol *const protocol) {
 }
 
 const Protocol *objc_getProtocol(const char *const name) {
-    for (const Protocol **ptr = protolist; ptr < &protolist_end; ptr++) {
+    for (const Protocol **ptr = protolist; ptr != &protolist_end; ptr++) {
         const Protocol *protocol = *ptr;
 
         if (!strcmp(name, protocol->_name)) {
